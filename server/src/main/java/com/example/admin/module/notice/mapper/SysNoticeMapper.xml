@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.admin.module.notice.mapper.SysNoticeMapper">
+
+    <sql id="accessibleCondition">
+        n.deleted = 0 AND n.status = 1
+        AND (
+            NOT EXISTS (SELECT 1 FROM sys_notice_target nt0 WHERE nt0.notice_id = n.id)
+            OR EXISTS (
+                SELECT 1 FROM sys_notice_target nt
+                WHERE nt.notice_id = n.id AND (
+                    nt.target_type = 'ALL'
+                    OR (nt.target_type = 'USER' AND nt.target_id = #{userId})
+                    OR (nt.target_type = 'DEPT' AND nt.target_id = #{deptId})
+                    OR (nt.target_type = 'ROLE' AND EXISTS (
+                        SELECT 1 FROM sys_user_role ur
+                        WHERE ur.user_id = #{userId} AND ur.role_id = nt.target_id
+                    ))
+                )
+            )
+        )
+    </sql>
+
+    <select id="selectMessagePage" resultType="com.example.admin.module.notice.dto.MessageVO">
+        SELECT n.id, n.notice_title, n.notice_type, n.notice_content, n.creator_name, n.publish_time,
+               CASE WHEN nr.user_id IS NULL THEN 0 ELSE 1 END AS read_status,
+               nr.read_time
+        FROM sys_notice n
+        LEFT JOIN sys_notice_read nr ON nr.notice_id = n.id AND nr.user_id = #{userId}
+        WHERE <include refid="accessibleCondition"/>
+        <if test="query.title != null and query.title != ''">
+            AND n.notice_title LIKE CONCAT('%', #{query.title}, '%')
+        </if>
+        <if test="query.noticeType != null">
+            AND n.notice_type = #{query.noticeType}
+        </if>
+        <if test="query.readStatus != null and query.readStatus == 0">
+            AND nr.user_id IS NULL
+        </if>
+        <if test="query.readStatus != null and query.readStatus == 1">
+            AND nr.user_id IS NOT NULL
+        </if>
+        ORDER BY n.publish_time DESC, n.id DESC
+    </select>
+
+    <select id="selectAccessibleMessage" resultType="com.example.admin.module.notice.dto.MessageVO">
+        SELECT n.id, n.notice_title, n.notice_type, n.notice_content, n.creator_name, n.publish_time,
+               CASE WHEN nr.user_id IS NULL THEN 0 ELSE 1 END AS read_status,
+               nr.read_time
+        FROM sys_notice n
+        LEFT JOIN sys_notice_read nr ON nr.notice_id = n.id AND nr.user_id = #{userId}
+        WHERE n.id = #{id} AND <include refid="accessibleCondition"/>
+    </select>
+
+    <select id="countUnread" resultType="long">
+        SELECT COUNT(1)
+        FROM sys_notice n
+        LEFT JOIN sys_notice_read nr ON nr.notice_id = n.id AND nr.user_id = #{userId}
+        WHERE <include refid="accessibleCondition"/> AND nr.user_id IS NULL
+    </select>
+
+    <select id="selectUnreadIds" resultType="long">
+        SELECT n.id
+        FROM sys_notice n
+        LEFT JOIN sys_notice_read nr ON nr.notice_id = n.id AND nr.user_id = #{userId}
+        WHERE <include refid="accessibleCondition"/> AND nr.user_id IS NULL
+    </select>
+</mapper>
