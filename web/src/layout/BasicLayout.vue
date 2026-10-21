@@ -26,6 +26,7 @@ import {
 import { logout } from '@/api/auth'
 import { getUnreadCount } from '@/api/message'
 import { useAuthStore } from '@/stores/auth'
+import { getAvatarPresentation } from '@/utils/avatar'
 import { resolveMenuIcon } from '@/utils/icon'
 import type { MenuTreeNode } from '@/types/api'
 
@@ -82,9 +83,13 @@ function onMenuClick({ key }: { key: string }) {
   if (key !== route.path && !key.startsWith('menu-')) router.push(key)
 }
 
-const displayName = computed(
-  () => auth.userInfo.value?.nickname || auth.userInfo.value?.username || '用户',
+const currentUserAvatar = computed(() =>
+  getAvatarPresentation({
+    nickname: auth.userInfo.value?.nickname,
+    username: auth.userInfo.value?.username,
+  }),
 )
+const displayName = computed(() => currentUserAvatar.value.displayName)
 
 // 水印配置
 const WATERMARK_TIME_FORMAT = 'yyyy-MM-dd HH:mm:ss'
@@ -245,7 +250,12 @@ function handleLogout() {
           </Badge>
           <Dropdown :menu="userMenu" trigger="click">
             <div class="user-area">
-              <Avatar :icon="UserOutlined" style="background-color: #1677ff" />
+              <Avatar
+                :icon="currentUserAvatar.initial ? undefined : UserOutlined"
+                :style="{ backgroundColor: currentUserAvatar.backgroundColor }"
+              >
+                {{ currentUserAvatar.initial }}
+              </Avatar>
               <span class="user-name">{{ displayName }}</span>
               <DownOutlined style="font-size: 12px" />
             </div>
