@@ -37,6 +37,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         loginUser.setUsername(user.getUsername());
         loginUser.setPassword(user.getPassword());
         loginUser.setNickname(user.getNickname());
+        loginUser.setAvatar(user.getAvatar());
         loginUser.setDeptId(user.getDeptId());
         // 停用用户照样装载，由 isEnabled() 拦截，这样能给出"账号已停用"而不是"用户不存在"
         loginUser.setStatus(user.getStatus());

@@ -34,6 +34,7 @@ public class AuthService {
     private final SysLoginLogService sysLoginLogService;
     private final CaptchaService captchaService;
     private final SysOnlineSessionService onlineSessionService;
+    private final ProfileAvatarService profileAvatarService;
 
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         // 先校验验证码（开关关闭时 verify 恒为 true）
@@ -81,6 +82,7 @@ public class AuthService {
         vo.setUserId(loginUser.getUserId());
         vo.setUsername(loginUser.getUsername());
         vo.setNickname(loginUser.getNickname());
+        vo.setAvatarUrl(profileAvatarService.urlFor(loginUser.getAvatar()));
         vo.setRoles(loginUser.getRoles());
         vo.setPermissions(loginUser.getPermissions());
         return vo;
@@ -104,8 +106,10 @@ public class AuthService {
         ProfileVO vo = new ProfileVO();
         vo.setUsername(user.getUsername());
         vo.setNickname(user.getNickname());
+        vo.setAvatarUrl(profileAvatarService.urlFor(user.getAvatar()));
         vo.setEmail(user.getEmail());
         vo.setPhone(user.getPhone());
         return vo;
     }
+
 }

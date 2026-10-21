@@ -2,7 +2,6 @@
 import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Avatar,
   Badge,
   Breadcrumb,
   Content,
@@ -24,6 +23,7 @@ import {
   UserOutlined,
 } from '@hmfw/icons'
 import { logout } from '@/api/auth'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { getUnreadCount } from '@/api/message'
 import { useAuthStore } from '@/stores/auth'
 import { getAvatarPresentation } from '@/utils/avatar'
@@ -87,6 +87,7 @@ const currentUserAvatar = computed(() =>
   getAvatarPresentation({
     nickname: auth.userInfo.value?.nickname,
     username: auth.userInfo.value?.username,
+    avatarUrl: auth.userInfo.value?.avatarUrl,
   }),
 )
 const displayName = computed(() => currentUserAvatar.value.displayName)
@@ -250,12 +251,12 @@ function handleLogout() {
           </Badge>
           <Dropdown :menu="userMenu" trigger="click">
             <div class="user-area">
-              <Avatar
-                :icon="currentUserAvatar.initial ? undefined : UserOutlined"
-                :style="{ backgroundColor: currentUserAvatar.backgroundColor }"
-              >
-                {{ currentUserAvatar.initial }}
-              </Avatar>
+              <UserAvatar
+                data-testid="nav-user-avatar"
+                :nickname="auth.userInfo.value?.nickname"
+                :username="auth.userInfo.value?.username"
+                :avatar-url="auth.userInfo.value?.avatarUrl"
+              />
               <span class="user-name">{{ displayName }}</span>
               <DownOutlined style="font-size: 12px" />
             </div>
@@ -378,5 +379,35 @@ function handleLogout() {
   background: #fff;
   border-radius: 8px;
   overflow: auto;
+}
+
+@media (max-width: 760px) {
+  .header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .header-left,
+  .header-actions {
+    gap: 8px;
+  }
+
+  .header-left {
+    min-width: 0;
+  }
+
+  .user-area {
+    padding: 0 2px;
+  }
+
+  .user-name,
+  .user-area > .anticon-down {
+    display: none;
+  }
+
+  .content {
+    margin: 8px;
+    padding: 12px;
+  }
 }
 </style>

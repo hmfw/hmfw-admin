@@ -1,6 +1,7 @@
 package com.example.admin.module.user.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -25,6 +26,9 @@ public class SysUser {
     private String password;
 
     private String nickname;
+
+    @TableField(updateStrategy = FieldStrategy.NEVER)
+    private String avatar;
 
     private String email;
 

@@ -167,6 +167,8 @@ export const http = {
     request<T>(path, { method: 'GET', params, silent }),
   post: <T>(path: string, body?: unknown, silent?: boolean) =>
     request<T>(path, { method: 'POST', body, silent }),
+  delete: <T>(path: string, silent?: boolean) =>
+    request<T>(path, { method: 'DELETE', silent }),
   getBlob: async (path: string, params?: Record<string, unknown>): Promise<Blob> => {
     const url = buildUrl(path, params)
     const headers: Record<string, string> = {}

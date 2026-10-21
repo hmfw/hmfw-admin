@@ -4,6 +4,7 @@ import com.example.admin.common.api.R;
 import com.example.admin.common.ratelimit.RateLimit;
 import com.example.admin.module.auth.captcha.CaptchaService;
 import com.example.admin.module.auth.dto.CaptchaVO;
+import com.example.admin.module.auth.dto.AvatarVO;
 import com.example.admin.module.auth.dto.LoginRequest;
 import com.example.admin.module.auth.dto.LoginResponse;
 import com.example.admin.module.auth.dto.ProfileVO;
@@ -20,10 +21,13 @@ import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -37,6 +41,7 @@ public class AuthController {
     private final SysMenuService sysMenuService;
     private final SysUserService sysUserService;
     private final CaptchaService captchaService;
+    private final ProfileAvatarService profileAvatarService;
 
     @Operation(summary = "图形验证码", description = "返回 base64 图片与 captchaKey；enabled=false 时前端跳过验证码")
     @GetMapping("/captcha")
@@ -88,6 +93,20 @@ public class AuthController {
     @GetMapping("/profile")
     public R<ProfileVO> profile() {
         return R.ok(authService.getProfile(SecurityUtils.getUserId()));
+    }
+
+    @Operation(summary = "上传个人头像", description = "当前登录用户上传自己的 JPEG/PNG 头像，不需要文件管理权限")
+    @PostMapping(value = "/avatar", consumes = "multipart/form-data")
+    public R<AvatarVO> uploadAvatar(@RequestParam("file") MultipartFile file) {
+        String key = profileAvatarService.upload(SecurityUtils.getUserId(), file);
+        return R.ok(AvatarVO.of(profileAvatarService.urlFor(key)));
+    }
+
+    @Operation(summary = "移除个人头像", description = "清除当前登录用户的自定义头像")
+    @DeleteMapping("/avatar")
+    public R<Void> removeAvatar() {
+        profileAvatarService.remove(SecurityUtils.getUserId());
+        return R.ok();
     }
 
     @Operation(summary = "修改密码", description = "当前登录用户改自己的密码，需校验原密码")

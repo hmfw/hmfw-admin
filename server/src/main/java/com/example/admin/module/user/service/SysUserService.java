@@ -287,6 +287,7 @@ public class SysUserService {
         vo.setId(user.getId());
         vo.setUsername(user.getUsername());
         vo.setNickname(user.getNickname());
+        vo.setAvatar(user.getAvatar());
         vo.setEmail(user.getEmail());
         vo.setPhone(user.getPhone());
         vo.setDeptId(user.getDeptId());

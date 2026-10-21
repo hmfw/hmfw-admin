@@ -3,7 +3,6 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import {
   Alert,
-  Avatar,
   Button,
   Form,
   FormItem,
@@ -14,8 +13,16 @@ import {
   Tabs,
   message,
 } from '@hmfw/ant-design'
-import { UserOutlined } from '@hmfw/icons'
-import { getProfile, updatePassword, updateProfile } from '@/api/auth'
+import { DeleteOutlined, UploadOutlined } from '@hmfw/icons'
+import {
+  getProfile,
+  removeAvatar,
+  updatePassword,
+  updateProfile,
+  uploadAvatar,
+} from '@/api/auth'
+import AvatarCropperModal from '@/components/AvatarCropperModal.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getAvatarPresentation } from '@/utils/avatar'
 
@@ -34,6 +41,12 @@ const tabItems = [
 /* --------------------------- 基础资料 --------------------------- */
 const username = ref('')
 const identityNickname = ref('')
+const avatarUrl = ref<string>()
+const avatarFileInput = ref<HTMLInputElement>()
+const avatarFile = ref<File | null>(null)
+const cropperOpen = ref(false)
+const avatarUploading = ref(false)
+const avatarRemoving = ref(false)
 const profileRef = ref()
 const profileSaving = ref(false)
 const profileForm = reactive({ nickname: '', email: '', phone: '' })
@@ -52,7 +65,11 @@ const isProfileDirty = computed(() =>
   ),
 )
 const avatar = computed(() =>
-  getAvatarPresentation({ nickname: identityNickname.value, username: username.value }),
+  getAvatarPresentation({
+    nickname: identityNickname.value,
+    username: username.value,
+    avatarUrl: avatarUrl.value,
+  }),
 )
 
 function normalizedProfile(profile: {
@@ -126,6 +143,7 @@ async function loadProfile() {
     const profile = await getProfile()
     username.value = profile.username
     identityNickname.value = profile.nickname ?? ''
+    avatarUrl.value = profile.avatarUrl ?? undefined
     applyProfileValues(normalizedProfile(profile))
     profileLoaded.value = true
   } catch {
@@ -136,6 +154,90 @@ async function loadProfile() {
   }
 }
 onMounted(loadProfile)
+
+const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024
+const AVATAR_MIME_TYPES = new Set(['image/jpeg', 'image/png'])
+const AVATAR_FILE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
+
+function selectAvatar() {
+  if (!avatarUploading.value && !avatarRemoving.value) avatarFileInput.value?.click()
+}
+
+function handleAvatarFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  const filename = file.name.toLocaleLowerCase()
+  const hasSupportedExtension = AVATAR_FILE_EXTENSIONS.some((extension) =>
+    filename.endsWith(extension),
+  )
+  if (!AVATAR_MIME_TYPES.has(file.type) || !hasSupportedExtension) {
+    message.error('仅支持 JPEG 或 PNG 图片')
+    return
+  }
+  if (file.size > MAX_AVATAR_FILE_SIZE) {
+    message.error('头像图片不能超过 5 MiB')
+    return
+  }
+  avatarFile.value = file
+  cropperOpen.value = true
+}
+
+function closeCropper() {
+  if (avatarUploading.value) return
+  cropperOpen.value = false
+  avatarFile.value = null
+}
+
+async function refreshAvatarInNavigation(failureMessage: string) {
+  try {
+    await auth.refreshUserInfo()
+  } catch {
+    message.error(failureMessage)
+  }
+}
+
+async function saveCroppedAvatar(blob: Blob) {
+  if (avatarUploading.value) return
+  avatarUploading.value = true
+  try {
+    const result = await uploadAvatar(blob)
+    avatarUrl.value = result.avatarUrl
+    cropperOpen.value = false
+    avatarFile.value = null
+    message.success('头像已更新')
+    await refreshAvatarInNavigation('头像已更新，但顶部用户信息刷新失败')
+  } catch {
+    // 请求层已展示错误；保留裁剪状态供用户重试。
+  } finally {
+    avatarUploading.value = false
+  }
+}
+
+function confirmRemoveAvatar() {
+  if (avatarRemoving.value || !avatarUrl.value) return
+  Modal.confirm({
+    title: '移除自定义头像？',
+    content: '移除后将恢复显示昵称或账号首字符。',
+    okText: '移除',
+    cancelText: '取消',
+    okType: 'danger',
+    onOk: async () => {
+      avatarRemoving.value = true
+      try {
+        await removeAvatar()
+        avatarUrl.value = undefined
+        message.success('头像已移除')
+        await refreshAvatarInNavigation('头像已移除，但顶部用户信息刷新失败')
+      } catch {
+        // 请求层已展示错误；保留当前头像。
+      } finally {
+        avatarRemoving.value = false
+      }
+    },
+  })
+}
 
 async function saveProfile() {
   if (!isProfileDirty.value || profileSaving.value) return
@@ -229,16 +331,46 @@ async function savePassword() {
 
     <div v-else-if="profileLoaded" data-testid="profile-content" class="profile-content">
       <aside class="identity-summary">
-        <Avatar
+        <UserAvatar
           data-testid="profile-avatar"
           :size="72"
-          :icon="avatar.initial ? undefined : UserOutlined"
-          :style="{ backgroundColor: avatar.backgroundColor }"
-        >
-          {{ avatar.initial }}
-        </Avatar>
+          :nickname="identityNickname"
+          :username="username"
+          :avatar-url="avatarUrl"
+        />
         <div data-testid="profile-display-name" class="identity-name">{{ avatar.displayName }}</div>
         <div data-testid="profile-account" class="identity-account">账号：{{ username }}</div>
+        <div class="avatar-actions">
+          <input
+            ref="avatarFileInput"
+            data-testid="avatar-file-input"
+            class="avatar-file-input"
+            type="file"
+            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+            @change="handleAvatarFileChange"
+          />
+          <Button
+            data-testid="choose-avatar"
+            size="small"
+            :disabled="avatarUploading || avatarRemoving"
+            @click="selectAvatar"
+          >
+            <UploadOutlined />
+            {{ avatarUrl ? '更换头像' : '上传头像' }}
+          </Button>
+          <Button
+            v-if="avatarUrl"
+            data-testid="remove-avatar"
+            size="small"
+            danger
+            :loading="avatarRemoving"
+            :disabled="avatarUploading"
+            @click="confirmRemoveAvatar"
+          >
+            <DeleteOutlined />
+            移除头像
+          </Button>
+        </div>
       </aside>
 
       <section class="settings-workspace">
@@ -332,6 +464,14 @@ async function savePassword() {
         </Tabs>
       </section>
     </div>
+
+    <AvatarCropperModal
+      :open="cropperOpen"
+      :file="avatarFile"
+      :busy="avatarUploading"
+      @cancel="closeCropper"
+      @confirm="saveCroppedAvatar"
+    />
   </div>
 </template>
 
@@ -375,6 +515,23 @@ async function savePassword() {
 .identity-summary {
   padding-right: 32px;
   border-right: 1px solid #f0f0f0;
+}
+
+.avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.avatar-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .identity-name {
@@ -427,16 +584,27 @@ async function savePassword() {
   }
 
   .identity-summary :deep(.hmfw-avatar) {
+    grid-column: 1;
     grid-row: 1 / span 2;
   }
 
   .identity-name {
+    grid-column: 2;
+    grid-row: 1;
     align-self: end;
     margin-top: 0;
   }
 
   .identity-account {
+    grid-column: 2;
+    grid-row: 2;
     align-self: start;
+  }
+
+  .avatar-actions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin-top: 4px;
   }
 
   .settings-workspace {

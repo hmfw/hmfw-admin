@@ -28,6 +28,7 @@ export interface UserInfo {
   userId: string
   username: string
   nickname: string
+  avatarUrl?: string | null
   roles: string[]
   /** 权限标识；超级管理员含 "*:*:*" */
   permissions: string[]
@@ -69,6 +70,12 @@ export interface Profile {
   nickname?: string
   email?: string
   phone?: string
+  avatarUrl?: string | null
+}
+
+/** 当前用户头像写入结果 */
+export interface AvatarResult {
+  avatarUrl: string
 }
 
 /** 菜单树节点（/api/auth/menus 与 /api/system/menu/tree 共用结构） */

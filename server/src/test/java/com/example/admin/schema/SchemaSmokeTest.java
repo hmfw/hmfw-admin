@@ -51,6 +51,13 @@ class SchemaSmokeTest {
     }
 
     @Test
+    void sysUserAvatarColumnSupportsExistingUsers() {
+        String avatar = jdbcTemplate.queryForObject(
+                "SELECT avatar FROM sys_user WHERE username = 'admin'", String.class);
+        assertThat(avatar).isNull();
+    }
+
+    @Test
     void logicalDeleteFlagIsUsable() {
         // deleted 是逻辑删除字段，必须能当普通数值列读写
         Integer deleted = jdbcTemplate.queryForObject(

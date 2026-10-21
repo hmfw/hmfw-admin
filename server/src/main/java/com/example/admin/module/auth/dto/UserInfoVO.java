@@ -10,6 +10,7 @@ public class UserInfoVO {
     private Long userId;
     private String username;
     private String nickname;
+    private String avatarUrl;
 
     /** 角色标识，如 admin */
     private Set<String> roles;

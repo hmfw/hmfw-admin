@@ -1,6 +1,7 @@
 import { http } from './request'
 import type {
   CaptchaVO,
+  AvatarResult,
   LoginRequest,
   LoginResponse,
   MenuTreeNode,
@@ -39,6 +40,18 @@ export function getProfile() {
 /** 修改个人资料（昵称/邮箱/手机号） */
 export function updateProfile(data: UpdateProfileRequest) {
   return http.post<void>('/auth/profile', data)
+}
+
+/** 上传当前用户裁剪后的头像。 */
+export function uploadAvatar(file: Blob) {
+  const form = new FormData()
+  form.append('file', file, 'avatar.png')
+  return http.post<AvatarResult>('/auth/avatar', form)
+}
+
+/** 移除当前用户的自定义头像。 */
+export function removeAvatar() {
+  return http.delete<void>('/auth/avatar')
 }
 
 /** 修改当前用户密码（需原密码） */

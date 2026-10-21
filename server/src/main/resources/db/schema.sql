@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS sys_user (
     username    VARCHAR(50)  NOT NULL                COMMENT '登录账号',
     password    VARCHAR(100) NOT NULL                COMMENT 'BCrypt 密文',
     nickname    VARCHAR(50)           DEFAULT NULL   COMMENT '昵称',
+    avatar      VARCHAR(255)          DEFAULT NULL   COMMENT '头像资源键',
     email       VARCHAR(100)          DEFAULT NULL   COMMENT '邮箱',
     phone       VARCHAR(20)           DEFAULT NULL   COMMENT '手机号',
     dept_id     BIGINT                DEFAULT NULL   COMMENT '部门 id',
@@ -24,6 +25,8 @@ CREATE TABLE IF NOT EXISTS sys_user (
     PRIMARY KEY (id),
     UNIQUE KEY uk_sys_user_username (username)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户表';
+
+ALTER TABLE sys_user ADD COLUMN IF NOT EXISTS avatar VARCHAR(255) DEFAULT NULL;
 
 CREATE TABLE IF NOT EXISTS sys_role (
     id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Modal } from '@hmfw/ant-design'
+import { Modal, message } from '@hmfw/ant-design'
 import type { Profile as ProfileData } from '@/types/api'
 
 const routerHooks = vi.hoisted(() => ({
@@ -20,12 +20,16 @@ vi.mock('vue-router', async () => {
 const getProfile = vi.fn<() => Promise<ProfileData>>()
 const updateProfile = vi.fn()
 const updatePassword = vi.fn()
+const uploadAvatar = vi.fn()
+const removeAvatar = vi.fn()
 const refreshUserInfo = vi.fn()
 
 vi.mock('@/api/auth', () => ({
   getProfile: () => getProfile(),
   updateProfile: (...args: unknown[]) => updateProfile(...args),
   updatePassword: (...args: unknown[]) => updatePassword(...args),
+  uploadAvatar: (...args: unknown[]) => uploadAvatar(...args),
+  removeAvatar: (...args: unknown[]) => removeAvatar(...args),
   getMe: vi.fn(),
   getMenus: vi.fn(),
 }))
@@ -35,6 +39,7 @@ vi.mock('@/stores/auth', () => ({
 }))
 
 import Profile from './Profile.vue'
+import AvatarCropperModal from '@/components/AvatarCropperModal.vue'
 
 const normalProfile: ProfileData = {
   username: 'admin',
@@ -66,6 +71,12 @@ async function openSecurityTab(wrapper: ReturnType<typeof mount>) {
   await flushPromises()
 }
 
+async function chooseAvatar(wrapper: ReturnType<typeof mount>, file: File) {
+  const input = wrapper.get('[data-testid="avatar-file-input"]')
+  Object.defineProperty(input.element, 'files', { configurable: true, value: [file] })
+  await input.trigger('change')
+}
+
 describe('Profile', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -73,6 +84,8 @@ describe('Profile', () => {
     getProfile.mockReset()
     updateProfile.mockReset()
     updatePassword.mockReset()
+    uploadAvatar.mockReset()
+    removeAvatar.mockReset()
     refreshUserInfo.mockReset()
   })
 
@@ -106,6 +119,16 @@ describe('Profile', () => {
       'value',
       '13800138000',
     )
+  })
+
+  it('接口返回 null 头像时使用字符头像且隐藏移除操作', async () => {
+    getProfile.mockResolvedValue({ ...normalProfile, avatarUrl: null })
+
+    const wrapper = mount(Profile)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="profile-avatar"]').text()).toBe('管')
+    expect(wrapper.find('[data-testid="remove-avatar"]').exists()).toBe(false)
   })
 
   it('昵称为空时身份摘要回退到账号', async () => {
@@ -229,6 +252,160 @@ describe('Profile', () => {
     expect(
       wrapper.findAll('button').find((button) => button.text().includes('保存资料'))!.attributes('disabled'),
     ).toBeUndefined()
+  })
+
+  it.each([
+    ['非 JPEG/PNG 文件', new File(['text'], 'avatar.gif', { type: 'image/gif' }), '仅支持 JPEG 或 PNG'],
+    [
+      '扩展名与图片类型不一致的文件',
+      new File(['png'], 'avatar.gif', { type: 'image/png' }),
+      '仅支持 JPEG 或 PNG',
+    ],
+    [
+      '超过 5 MiB 的图片',
+      new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' }),
+      '不能超过 5 MiB',
+    ],
+  ])('%s 在打开裁剪器前被拒绝', async (_name, file, expectedMessage) => {
+    getProfile.mockResolvedValue(normalProfile)
+    const error = vi.spyOn(message, 'error')
+    const wrapper = mount(Profile)
+    await flushPromises()
+
+    await chooseAvatar(wrapper, file)
+
+    expect(error).toHaveBeenCalledWith(expect.stringContaining(expectedMessage))
+    expect(wrapper.getComponent(AvatarCropperModal).props('open')).toBe(false)
+    expect(uploadAvatar).not.toHaveBeenCalled()
+  })
+
+  it('选择有效图片后打开裁剪器，取消后关闭且不上传', async () => {
+    getProfile.mockResolvedValue(normalProfile)
+    const wrapper = mount(Profile)
+    await flushPromises()
+
+    await chooseAvatar(wrapper, new File(['png'], 'avatar.png', { type: 'image/png' }))
+    expect(wrapper.getComponent(AvatarCropperModal).props('open')).toBe(true)
+
+    wrapper.getComponent(AvatarCropperModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.getComponent(AvatarCropperModal).props('open')).toBe(false)
+    expect(uploadAvatar).not.toHaveBeenCalled()
+  })
+
+  it('上传期间防止重复提交，成功后更新本页头像并刷新顶部用户信息', async () => {
+    getProfile.mockResolvedValue(normalProfile)
+    const pendingUpload = deferred<{ avatarUrl: string }>()
+    uploadAvatar.mockReturnValue(pendingUpload.promise)
+    refreshUserInfo.mockResolvedValue(undefined)
+    const wrapper = mount(Profile)
+    await flushPromises()
+    await chooseAvatar(wrapper, new File(['png'], 'avatar.png', { type: 'image/png' }))
+    const cropped = new Blob(['cropped'], { type: 'image/png' })
+
+    wrapper.getComponent(AvatarCropperModal).vm.$emit('confirm', cropped)
+    wrapper.getComponent(AvatarCropperModal).vm.$emit('confirm', cropped)
+    await vi.waitFor(() => expect(uploadAvatar).toHaveBeenCalledTimes(1))
+
+    expect(uploadAvatar).toHaveBeenCalledWith(cropped)
+    expect(wrapper.get('[data-testid="choose-avatar"]').attributes('disabled')).toBeDefined()
+
+    pendingUpload.resolve({ avatarUrl: '/api/profile-avatars/new.png' })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="profile-avatar"] img').attributes('src')).toBe(
+      '/api/profile-avatars/new.png',
+    )
+    expect(refreshUserInfo).toHaveBeenCalledTimes(1)
+    expect(wrapper.getComponent(AvatarCropperModal).props('open')).toBe(false)
+  })
+
+  it('头像上传成功但全局同步失败时保留新头像并提示', async () => {
+    getProfile.mockResolvedValue(normalProfile)
+    uploadAvatar.mockResolvedValue({ avatarUrl: '/api/profile-avatars/new.png' })
+    refreshUserInfo.mockRejectedValue(new Error('sync failed'))
+    const error = vi.spyOn(message, 'error')
+    const wrapper = mount(Profile)
+    await flushPromises()
+    await chooseAvatar(wrapper, new File(['png'], 'avatar.png', { type: 'image/png' }))
+
+    wrapper.getComponent(AvatarCropperModal).vm.$emit(
+      'confirm',
+      new Blob(['cropped'], { type: 'image/png' }),
+    )
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="profile-avatar"] img').attributes('src')).toBe(
+      '/api/profile-avatars/new.png',
+    )
+    expect(error).toHaveBeenCalledWith('头像已更新，但顶部用户信息刷新失败')
+  })
+
+  it('替换头像后立即切换到服务端返回的新资源 URL', async () => {
+    getProfile.mockResolvedValue({
+      ...normalProfile,
+      avatarUrl: '/api/profile-avatars/old.png',
+    })
+    uploadAvatar.mockResolvedValue({ avatarUrl: '/api/profile-avatars/new.png' })
+    refreshUserInfo.mockResolvedValue(undefined)
+    const wrapper = mount(Profile)
+    await flushPromises()
+    await chooseAvatar(wrapper, new File(['jpeg'], 'avatar.jpg', { type: 'image/jpeg' }))
+
+    wrapper.getComponent(AvatarCropperModal).vm.$emit(
+      'confirm',
+      new Blob(['cropped'], { type: 'image/png' }),
+    )
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="profile-avatar"] img').attributes('src')).toBe(
+      '/api/profile-avatars/new.png',
+    )
+  })
+
+  it('确认移除头像后回退字符头像且不改变资料表单脏状态', async () => {
+    getProfile.mockResolvedValue({
+      ...normalProfile,
+      avatarUrl: '/api/profile-avatars/old.png',
+    })
+    removeAvatar.mockResolvedValue(undefined)
+    refreshUserInfo.mockResolvedValue(undefined)
+    answerNextConfirmation(true)
+    const wrapper = mount(Profile)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="remove-avatar"]').trigger('click')
+    await flushPromises()
+
+    expect(removeAvatar).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="profile-avatar"] img').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="profile-avatar"]').text()).toContain('管')
+    expect(
+      wrapper.findAll('button').find((button) => button.text().includes('保存资料'))!.attributes('disabled'),
+    ).toBeDefined()
+  })
+
+  it('移除头像失败时保留原图片，自定义头像为空时隐藏移除操作', async () => {
+    getProfile.mockResolvedValueOnce({
+      ...normalProfile,
+      avatarUrl: '/api/profile-avatars/old.png',
+    })
+    removeAvatar.mockRejectedValue(new Error('remove failed'))
+    answerNextConfirmation(true)
+    const wrapper = mount(Profile)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="remove-avatar"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="profile-avatar"] img').attributes('src')).toBe(
+      '/api/profile-avatars/old.png',
+    )
+
+    getProfile.mockResolvedValueOnce(normalProfile)
+    const withoutAvatar = mount(Profile)
+    await flushPromises()
+    expect(withoutAvatar.find('[data-testid="remove-avatar"]').exists()).toBe(false)
   })
 
   it('资料未修改时直接切换到账号安全页签', async () => {

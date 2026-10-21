@@ -1,12 +1,14 @@
 export interface AvatarIdentity {
   nickname?: string | null
   username?: string | null
+  avatarUrl?: string | null
 }
 
 export interface AvatarPresentation {
   displayName: string
   initial: string
   backgroundColor: string
+  imageUrl?: string
 }
 
 const AVATAR_COLORS = ['#4f6f8f', '#5f7f6b', '#8a6d5d', '#6f6792', '#397b78', '#8a6670']
@@ -25,10 +27,12 @@ export function getAvatarPresentation(identity: AvatarIdentity): AvatarPresentat
   const sourceName = nickname || username
   const displayName = sourceName || '用户'
   const initial = sourceName ? (Array.from(sourceName)[0]?.toLocaleUpperCase() ?? '') : ''
+  const imageUrl = identity.avatarUrl?.trim() || undefined
 
   return {
     displayName,
     initial,
     backgroundColor: AVATAR_COLORS[stableColorIndex(displayName)],
+    imageUrl,
   }
 }

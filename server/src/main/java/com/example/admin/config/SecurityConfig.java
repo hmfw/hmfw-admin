@@ -92,6 +92,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(matcher.matcher(HttpMethod.POST, "/api/auth/login")).permitAll()
                         .requestMatchers(matcher.matcher(HttpMethod.GET, "/api/auth/captcha")).permitAll()
+                        .requestMatchers(matcher.matcher(HttpMethod.GET, "/api/profile-avatars/{key}")).permitAll()
                         .requestMatchers(
                                 matcher.matcher("/v3/api-docs/**"),
                                 matcher.matcher("/swagger-ui/**"),

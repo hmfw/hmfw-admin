@@ -70,6 +70,10 @@ curl -s "http://localhost:8080/api/system/user/list?pageNum=1&pageSize=10" \
 | GET | `/profile` | 个人资料（含邮箱/手机号） | 登录 |
 | POST | `/profile` | 修改个人资料（昵称/邮箱/手机号） | 登录 |
 | POST | `/password` | 修改本人密码（校验原密码） | 登录 |
+| POST | `/avatar` | 上传并替换本人头像（JPEG/PNG，最大 5 MiB） | 登录 |
+| DELETE | `/avatar` | 移除本人自定义头像 | 登录 |
+
+头像图片通过 `GET /api/profile-avatars/{key}` 匿名只读访问；资源键不可枚举，响应为规范化 PNG 并使用 immutable 缓存。
 
 > 其余模块接口（权限标识）：
 > - 部门 `/api/system/dept`：`system:dept:list/query/add/edit/remove`
@@ -205,25 +209,28 @@ mvn spring-boot:run
 mvn test
 ```
 
-88 个用例，跑在 H2 内存库上，无需外部依赖。覆盖：
+105 个用例，跑在 H2 内存库上，无需外部依赖。覆盖：
 
 | 测试类 | 用例数 | 覆盖点 |
 |---|---|---|
 | `AdminApplicationTests` | 1 | Spring 上下文能正常加载 |
-| `SchemaSmokeTest` | 3 | 全部表与种子数据完整性 —— 防止建表脚本写错 |
+| `SchemaSmokeTest` | 4 | 全部表、种子数据与头像列迁移完整性 —— 防止建表脚本写错 |
 | `SeedPasswordTest` | 2 | BCrypt 密文能匹配 `admin123` |
 | `JwtUtilsTest` | 7 | 签发/解析/过期/篡改/换密钥/弱密钥 |
 | `CaptchaServiceTest` | 4 | 验证码生成/一次性校验/过期/开关 |
 | `RateLimiterTest` | 3 | 固定窗口限流计数/独立 key/窗口重置 |
-| `AuthApiTest` | 14 | 登录成功失败、401、权限集合、验证码公开、个人资料/改密、刷新 token |
-| `SysUserApiTest` | 10 | 分页、CRUD、逻辑删除、唯一约束、密码不外泄 |
+| `ProfileAvatarServiceTest` | 12 | 图片校验、规范化、路径约束、并发保护、替换回滚与文件清理 |
+| `AuthApiTest` | 18 | 登录、权限、个人资料/改密/刷新 token、头像读写与公开资源 |
+| `SysUserApiTest` | 15 | 分页、CRUD、逻辑删除、唯一约束、导入导出、密码不外泄 |
 | `SysRoleMenuApiTest` | 12 | 菜单树嵌套与过滤、权限分配、删除保护、细粒度越权 |
 | `SysDeptApiTest` | 6 | 部门树/CRUD/删除保护 + 数据范围端到端 |
 | `SysDictApiTest` | 7 | 字典类型/数据 CRUD、一体化保存（类型+项增改删）、唯一约束、越权 |
 | `SysMonitorLogApiTest` | 4 | 操作日志（切面落库）、登录日志、越权 |
 | `DashboardMessageOnlineApiTest` | 4 | 看板、定向消息/已读状态、强制下线、登出失效 |
+| `SysNoticeApiTest` | 3 | 通知公告 CRUD 与权限校验 |
+| `SysFileApiTest` | 3 | 通用文件上传、下载与删除权限 |
 
-> 共 88 个用例。API 测试的公共基类 `ApiTestBase`（提供 `adminToken()` / `viewerToken()`）本身不含用例。
+> 共 105 个用例。API 测试的公共基类 `ApiTestBase`（提供 `adminToken()` / `viewerToken()`）本身不含用例。
 
 API 测试通过 MockMvc 走**真实过滤器链**，401/403 和 `@PreAuthorize` 都是真跑一遍。
 

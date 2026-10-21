@@ -18,6 +18,7 @@ public class LoginUser implements UserDetails {
     private String username;
     private String password;
     private String nickname;
+    private String avatar;
 
     /** 所属部门 id，用于数据范围过滤 */
     private Long deptId;
